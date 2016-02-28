@@ -1,3 +1,4 @@
+import os
 from flask import Flask, send_file
 
 app = Flask(__name__)
@@ -14,5 +15,7 @@ def tests():
 
 
 if __name__ == '__main__':
-    app.debug = True
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    if 'DEBUG' in os.environ:
+        app.debug = True
+    app.run(host='0.0.0.0', port=port)
