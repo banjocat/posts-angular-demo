@@ -2,19 +2,23 @@
 <html lang="en" ng-app='stickyApp'>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Postit!</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/3.0.3/normalize.css">
-  <link href='https://fonts.googleapis.com/css?family=Gloria+Hallelujah' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Gloria+Hallelujah'
+  rel='stylesheet' type='text/css'>
   <link rel="stylesheet" href="static/css/style.css">
   <script src='static/js/bundle.js'></script>
 </head>
-<body ng-controller='stickyPosts'>
-  <div ng-repeat='post in posts'>
-    <div class='post'>
-      <textarea rows='6' cols='20' ng-model='post.text' ng-keyup='save(post.id, post.text)'>{{post.text}}</textarea>
-      <span class ='hover' ng-click='delete(post.id)'>X</span>
-    </div>
+<body ng-controller='stickyPosts' class='container'>
+  <div class='row'>
+  <div ng-repeat='post in posts' class='post col-lg-2 col-md-4 col-xs-5'>
+      <textarea rows='6' ng-model='post.text'
+      ng-keyup='save(post.id, post.text)'>{{post.text}}</textarea>
+      <buton class='btn btn-primary btn-circle' ng-click='delete(post.id)'>X</button>
   </div>
-  <span class='add hover' ng-click='add()'>+</span>
+</div>
+<div class='row add'>
+  <button class='btn btn-primary' ng-click='add()'>Add another!</button>
+</div>
 </body>
 </html>

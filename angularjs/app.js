@@ -7,13 +7,10 @@ stickyApp.service('$webstorage', function() {
     this.getposts = function() {
       var value = localStorage.getItem('posts');
       // If first time visiting or it is empty
-      console.log(typeof value);
       if (!value || value == "[]") {
-        console.log('this');
         return [{id: 1, text: 'Replace me!'}];
       }
       else {
-        console.log('that');
         return angular.fromJson(value);
       }
     }
@@ -35,7 +32,6 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
         if (match >= id)
           id = $scope.posts[i].id + 1;
       }
-      console.log('next id is', id);
       return id;
   };
 
@@ -52,7 +48,6 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
       }
     }
     $webstorage.saveposts($scope.posts);
-    console.log($scope.posts);
   }
 
   $scope.delete = function(id) {
