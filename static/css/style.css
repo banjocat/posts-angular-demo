@@ -1,0 +1,18 @@
+* {
+  font-family: 'Gloria Hallelujah', cursive;
+}
+
+.post { background-color: yellow; padding-top: 15px; padding-bottom: 0px;
+margin: 10px; float: left; }
+
+textarea {
+  resize: none;
+  height: auto;
+  background-color: yellow;
+  border: 0;
+  outline: none;
+}
+
+.hover {
+  cursor: pointer;
+}
