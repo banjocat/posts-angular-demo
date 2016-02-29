@@ -7,7 +7,8 @@ var less = require('gulp-less');
 var rename = require('gulp-rename');
 
 jsfiles = [
-    'angularjs/app.js'
+    'angularjs/app.js',
+    'angularjs/angular-mocks.js'
 ];
 
 lessfiles = [
@@ -23,6 +24,7 @@ gulp.task('js', function() {
   .pipe(gulp.dest('static/js'))
 });
 
+
 gulp.task('less', function() {
   return gulp.src(lessfiles)
   .pipe(less())
@@ -37,7 +39,7 @@ gulp.task('watch', function() {
 
 
 gulp.task('jasmine', function() {
-  var filesForTest = ['src/**/*.js', 'spec/**/spec.js']
+  var filesForTest = ['static/js/*.js', 'spec/**/spec.js']
 return gulp.src(filesForTest)
   .pipe(watch(filesForTest))
   .pipe(jasmineBrowser.specRunner())

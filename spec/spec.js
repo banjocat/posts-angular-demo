@@ -8,18 +8,36 @@ describe("A suite", function() {
 
 describe('stickyAppController', function() {
 
-  beforeEach(mock.module('stickyApp'));
+  beforeEach(module('stickyApp'));
   var $controller;
 
-  beforeEach(inject(function (_$controller_) {
+  beforeEach(angular.mock.inject(function (_$controller_) {
     $controller = _$controller_;
   }));
 
-console.log('hi');
-  describe('$webstorage', function() {
-    it('gets webstorage and it is an array', function() {
-      var controller = $controller('stickyPosts');
-      console.log($webstorage.getposts());
+  describe('add, save and delete', function() {
+    $scope = {};
+    $webstorage = {};
+    var storage = [];
+    // Mock webstorage
+    $webstorage.getposts = function() {
+      return storage;
+    }
+    $webstorage.addpost = function(post) {
+      storage.push(post);
+    }
+    $webstorage.saveposts = function() {};
+
+    it('id of new posts set correct', function() {
+      var controller = $controller('stickyPosts',
+      { $scope: $scope, $webstorage: $webstorage });
+      $scope.add();
+      expect($scope.posts.length).toBe(1);
+      expect($scope.posts[0].id).toBe(1);
+      $scope.add();
+      expect($scope.posts.length).toBe(2);
+      expect($scope.posts[1].id).toBe(2);
     })
+
   });
 });
