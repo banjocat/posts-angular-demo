@@ -15,6 +15,30 @@ describe('stickyAppController', function() {
     $controller = _$controller_;
   }));
 
+  describe('saving data to mongo or storaging it', function() {
+      $scope = {};
+  });
+
+  describe('mongoDb setup', function() {
+      $scope = {};
+      $http =
+      it('can get json of new addition', function() {
+        var controller = $controller('stickyPosts',
+        { $scope: $scope, $http: $http });
+        /*
+        add json to array of things to add
+        call mongoDb
+        Try to save
+          if fail:
+            report the failure
+            set timer to try again
+          if succecss:
+            remove storage
+        */
+
+      });
+  });
+
   describe('add, save and delete', function() {
     $scope = {};
     $webstorage = {};
@@ -40,4 +64,5 @@ describe('stickyAppController', function() {
     })
 
   });
+
 });

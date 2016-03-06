@@ -1,1797 +1,32 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-/**
- * @license AngularJS v"NG_VERSION_FULL"
- * (c) 2010-2012 Google, Inc. http://angularjs.org
- * License: MIT
- *
- * TODO(vojta): wrap whole file into closure during build
- */
-
-/**
- * @ngdoc overview
- * @name angular.mock
- * @description
- *
- * Namespace from 'angular-mocks.js' which contains testing related code.
- */
-angular.mock = {};
-
-/**
- * ! This is a private undocumented service !
- *
- * @name ngMock.$browser
- *
- * @description
- * This service is a mock implementation of {@link ng.$browser}. It provides fake
- * implementation for commonly used browser apis that are hard to test, e.g. setTimeout, xhr,
- * cookies, etc...
- *
- * The api of this service is the same as that of the real {@link ng.$browser $browser}, except
- * that there are several helper methods available which can be used in tests.
- */
-angular.mock.$BrowserProvider = function() {
-  this.$get = function(){
-    return new angular.mock.$Browser();
-  };
-};
-
-angular.mock.$Browser = function() {
-  var self = this;
-
-  this.isMock = true;
-  self.$$url = "http://server/";
-  self.$$lastUrl = self.$$url; // used by url polling fn
-  self.pollFns = [];
-
-  // TODO(vojta): remove this temporary api
-  self.$$completeOutstandingRequest = angular.noop;
-  self.$$incOutstandingRequestCount = angular.noop;
-
-
-  // register url polling fn
-
-  self.onUrlChange = function(listener) {
-    self.pollFns.push(
-      function() {
-        if (self.$$lastUrl != self.$$url) {
-          self.$$lastUrl = self.$$url;
-          listener(self.$$url);
-        }
-      }
-    );
-
-    return listener;
-  };
-
-  self.cookieHash = {};
-  self.lastCookieHash = {};
-  self.deferredFns = [];
-  self.deferredNextId = 0;
-
-  self.defer = function(fn, delay) {
-    delay = delay || 0;
-    self.deferredFns.push({time:(self.defer.now + delay), fn:fn, id: self.deferredNextId});
-    self.deferredFns.sort(function(a,b){ return a.time - b.time;});
-    return self.deferredNextId++;
-  };
-
-
-  self.defer.now = 0;
-
-
-  self.defer.cancel = function(deferId) {
-    var fnIndex;
-
-    angular.forEach(self.deferredFns, function(fn, index) {
-      if (fn.id === deferId) fnIndex = index;
-    });
-
-    if (fnIndex !== undefined) {
-      self.deferredFns.splice(fnIndex, 1);
-      return true;
-    }
-
-    return false;
-  };
-
-
-  /**
-   * @name ngMock.$browser#defer.flush
-   * @methodOf ngMock.$browser
-   *
-   * @description
-   * Flushes all pending requests and executes the defer callbacks.
-   *
-   * @param {number=} number of milliseconds to flush. See {@link #defer.now}
-   */
-  self.defer.flush = function(delay) {
-    if (angular.isDefined(delay)) {
-      self.defer.now += delay;
-    } else {
-      if (self.deferredFns.length) {
-        self.defer.now = self.deferredFns[self.deferredFns.length-1].time;
-      } else {
-        throw Error('No deferred tasks to be flushed');
-      }
-    }
-
-    while (self.deferredFns.length && self.deferredFns[0].time <= self.defer.now) {
-      self.deferredFns.shift().fn();
-    }
-  };
-  /**
-   * @name ngMock.$browser#defer.now
-   * @propertyOf ngMock.$browser
-   *
-   * @description
-   * Current milliseconds mock time.
-   */
-
-  self.$$baseHref = '';
-  self.baseHref = function() {
-    return this.$$baseHref;
-  };
-};
-angular.mock.$Browser.prototype = {
-
-/**
-  * @name ngMock.$browser#poll
-  * @methodOf ngMock.$browser
-  *
-  * @description
-  * run all fns in pollFns
-  */
-  poll: function poll() {
-    angular.forEach(this.pollFns, function(pollFn){
-      pollFn();
-    });
-  },
-
-  addPollFn: function(pollFn) {
-    this.pollFns.push(pollFn);
-    return pollFn;
-  },
-
-  url: function(url, replace) {
-    if (url) {
-      this.$$url = url;
-      return this;
-    }
-
-    return this.$$url;
-  },
-
-  cookies:  function(name, value) {
-    if (name) {
-      if (value == undefined) {
-        delete this.cookieHash[name];
-      } else {
-        if (angular.isString(value) &&       //strings only
-            value.length <= 4096) {          //strict cookie storage limits
-          this.cookieHash[name] = value;
-        }
-      }
-    } else {
-      if (!angular.equals(this.cookieHash, this.lastCookieHash)) {
-        this.lastCookieHash = angular.copy(this.cookieHash);
-        this.cookieHash = angular.copy(this.cookieHash);
-      }
-      return this.cookieHash;
-    }
-  },
-
-  notifyWhenNoOutstandingRequests: function(fn) {
-    fn();
-  }
-};
-
-
-/**
- * @ngdoc object
- * @name ngMock.$exceptionHandlerProvider
- *
- * @description
- * Configures the mock implementation of {@link ng.$exceptionHandler} to rethrow or to log errors passed
- * into the `$exceptionHandler`.
- */
-
-/**
- * @ngdoc object
- * @name ngMock.$exceptionHandler
- *
- * @description
- * Mock implementation of {@link ng.$exceptionHandler} that rethrows or logs errors passed
- * into it. See {@link ngMock.$exceptionHandlerProvider $exceptionHandlerProvider} for configuration
- * information.
- */
-
-angular.mock.$ExceptionHandlerProvider = function() {
-  var handler;
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$exceptionHandlerProvider#mode
-   * @methodOf ngMock.$exceptionHandlerProvider
-   *
-   * @description
-   * Sets the logging mode.
-   *
-   * @param {string} mode Mode of operation, defaults to `rethrow`.
-   *
-   *   - `rethrow`: If any errors are are passed into the handler in tests, it typically
-   *                means that there is a bug in the application or test, so this mock will
-   *                make these tests fail.
-   *   - `log`: Sometimes it is desirable to test that an error is throw, for this case the `log` mode stores an
-   *            array of errors in `$exceptionHandler.errors`, to allow later assertion of them.
-   *            See {@link ngMock.$log#assertEmpty assertEmpty()} and
-   *             {@link ngMock.$log#reset reset()}
-   */
-  this.mode = function(mode) {
-    switch(mode) {
-      case 'rethrow':
-        handler = function(e) {
-          throw e;
-        };
-        break;
-      case 'log':
-        var errors = [];
-
-        handler = function(e) {
-          if (arguments.length == 1) {
-            errors.push(e);
-          } else {
-            errors.push([].slice.call(arguments, 0));
-          }
-        };
-
-        handler.errors = errors;
-        break;
-      default:
-        throw Error("Unknown mode '" + mode + "', only 'log'/'rethrow' modes are allowed!");
-    }
-  };
-
-  this.$get = function() {
-    return handler;
-  };
-
-  this.mode('rethrow');
-};
-
-
-/**
- * @ngdoc service
- * @name ngMock.$log
- *
- * @description
- * Mock implementation of {@link ng.$log} that gathers all logged messages in arrays
- * (one array per logging level). These arrays are exposed as `logs` property of each of the
- * level-specific log function, e.g. for level `error` the array is exposed as `$log.error.logs`.
- *
- */
-angular.mock.$LogProvider = function() {
-
-  function concat(array1, array2, index) {
-    return array1.concat(Array.prototype.slice.call(array2, index));
-  }
-
-
-  this.$get = function () {
-    var $log = {
-      log: function() { $log.log.logs.push(concat([], arguments, 0)); },
-      warn: function() { $log.warn.logs.push(concat([], arguments, 0)); },
-      info: function() { $log.info.logs.push(concat([], arguments, 0)); },
-      error: function() { $log.error.logs.push(concat([], arguments, 0)); }
-    };
-
-    /**
-     * @ngdoc method
-     * @name ngMock.$log#reset
-     * @methodOf ngMock.$log
-     *
-     * @description
-     * Reset all of the logging arrays to empty.
-     */
-    $log.reset = function () {
-      /**
-       * @ngdoc property
-       * @name ngMock.$log#log.logs
-       * @propertyOf ngMock.$log
-       *
-       * @description
-       * Array of logged messages.
-       */
-      $log.log.logs = [];
-      /**
-       * @ngdoc property
-       * @name ngMock.$log#warn.logs
-       * @propertyOf ngMock.$log
-       *
-       * @description
-       * Array of logged messages.
-       */
-      $log.warn.logs = [];
-      /**
-       * @ngdoc property
-       * @name ngMock.$log#info.logs
-       * @propertyOf ngMock.$log
-       *
-       * @description
-       * Array of logged messages.
-       */
-      $log.info.logs = [];
-      /**
-       * @ngdoc property
-       * @name ngMock.$log#error.logs
-       * @propertyOf ngMock.$log
-       *
-       * @description
-       * Array of logged messages.
-       */
-      $log.error.logs = [];
-    };
-
-    /**
-     * @ngdoc method
-     * @name ngMock.$log#assertEmpty
-     * @methodOf ngMock.$log
-     *
-     * @description
-     * Assert that the all of the logging methods have no logged messages. If messages present, an exception is thrown.
-     */
-    $log.assertEmpty = function() {
-      var errors = [];
-      angular.forEach(['error', 'warn', 'info', 'log'], function(logLevel) {
-        angular.forEach($log[logLevel].logs, function(log) {
-          angular.forEach(log, function (logItem) {
-            errors.push('MOCK $log (' + logLevel + '): ' + String(logItem) + '\n' + (logItem.stack || ''));
-          });
-        });
-      });
-      if (errors.length) {
-        errors.unshift("Expected $log to be empty! Either a message was logged unexpectedly, or an expected " +
-          "log message was not checked and removed:");
-        errors.push('');
-        throw new Error(errors.join('\n---------\n'));
-      }
-    };
-
-    $log.reset();
-    return $log;
-  };
-};
-
-
-(function() {
-  var R_ISO8061_STR = /^(\d{4})-?(\d\d)-?(\d\d)(?:T(\d\d)(?:\:?(\d\d)(?:\:?(\d\d)(?:\.(\d{3}))?)?)?(Z|([+-])(\d\d):?(\d\d)))?$/;
-
-  function jsonStringToDate(string){
-    var match;
-    if (match = string.match(R_ISO8061_STR)) {
-      var date = new Date(0),
-          tzHour = 0,
-          tzMin  = 0;
-      if (match[9]) {
-        tzHour = int(match[9] + match[10]);
-        tzMin = int(match[9] + match[11]);
-      }
-      date.setUTCFullYear(int(match[1]), int(match[2]) - 1, int(match[3]));
-      date.setUTCHours(int(match[4]||0) - tzHour, int(match[5]||0) - tzMin, int(match[6]||0), int(match[7]||0));
-      return date;
-    }
-    return string;
-  }
-
-  function int(str) {
-    return parseInt(str, 10);
-  }
-
-  function padNumber(num, digits, trim) {
-    var neg = '';
-    if (num < 0) {
-      neg =  '-';
-      num = -num;
-    }
-    num = '' + num;
-    while(num.length < digits) num = '0' + num;
-    if (trim)
-      num = num.substr(num.length - digits);
-    return neg + num;
-  }
-
-
-  /**
-   * @ngdoc object
-   * @name angular.mock.TzDate
-   * @description
-   *
-   * *NOTE*: this is not an injectable instance, just a globally available mock class of `Date`.
-   *
-   * Mock of the Date type which has its timezone specified via constroctor arg.
-   *
-   * The main purpose is to create Date-like instances with timezone fixed to the specified timezone
-   * offset, so that we can test code that depends on local timezone settings without dependency on
-   * the time zone settings of the machine where the code is running.
-   *
-   * @param {number} offset Offset of the *desired* timezone in hours (fractions will be honored)
-   * @param {(number|string)} timestamp Timestamp representing the desired time in *UTC*
-   *
-   * @example
-   * !!!! WARNING !!!!!
-   * This is not a complete Date object so only methods that were implemented can be called safely.
-   * To make matters worse, TzDate instances inherit stuff from Date via a prototype.
-   *
-   * We do our best to intercept calls to "unimplemented" methods, but since the list of methods is
-   * incomplete we might be missing some non-standard methods. This can result in errors like:
-   * "Date.prototype.foo called on incompatible Object".
-   *
-   * <pre>
-   * var newYearInBratislava = new TzDate(-1, '2009-12-31T23:00:00Z');
-   * newYearInBratislava.getTimezoneOffset() => -60;
-   * newYearInBratislava.getFullYear() => 2010;
-   * newYearInBratislava.getMonth() => 0;
-   * newYearInBratislava.getDate() => 1;
-   * newYearInBratislava.getHours() => 0;
-   * newYearInBratislava.getMinutes() => 0;
-   * </pre>
-   *
-   */
-  angular.mock.TzDate = function (offset, timestamp) {
-    var self = new Date(0);
-    if (angular.isString(timestamp)) {
-      var tsStr = timestamp;
-
-      self.origDate = jsonStringToDate(timestamp);
-
-      timestamp = self.origDate.getTime();
-      if (isNaN(timestamp))
-        throw {
-          name: "Illegal Argument",
-          message: "Arg '" + tsStr + "' passed into TzDate constructor is not a valid date string"
-        };
-    } else {
-      self.origDate = new Date(timestamp);
-    }
-
-    var localOffset = new Date(timestamp).getTimezoneOffset();
-    self.offsetDiff = localOffset*60*1000 - offset*1000*60*60;
-    self.date = new Date(timestamp + self.offsetDiff);
-
-    self.getTime = function() {
-      return self.date.getTime() - self.offsetDiff;
-    };
-
-    self.toLocaleDateString = function() {
-      return self.date.toLocaleDateString();
-    };
-
-    self.getFullYear = function() {
-      return self.date.getFullYear();
-    };
-
-    self.getMonth = function() {
-      return self.date.getMonth();
-    };
-
-    self.getDate = function() {
-      return self.date.getDate();
-    };
-
-    self.getHours = function() {
-      return self.date.getHours();
-    };
-
-    self.getMinutes = function() {
-      return self.date.getMinutes();
-    };
-
-    self.getSeconds = function() {
-      return self.date.getSeconds();
-    };
-
-    self.getTimezoneOffset = function() {
-      return offset * 60;
-    };
-
-    self.getUTCFullYear = function() {
-      return self.origDate.getUTCFullYear();
-    };
-
-    self.getUTCMonth = function() {
-      return self.origDate.getUTCMonth();
-    };
-
-    self.getUTCDate = function() {
-      return self.origDate.getUTCDate();
-    };
-
-    self.getUTCHours = function() {
-      return self.origDate.getUTCHours();
-    };
-
-    self.getUTCMinutes = function() {
-      return self.origDate.getUTCMinutes();
-    };
-
-    self.getUTCSeconds = function() {
-      return self.origDate.getUTCSeconds();
-    };
-
-    self.getUTCMilliseconds = function() {
-      return self.origDate.getUTCMilliseconds();
-    };
-
-    self.getDay = function() {
-      return self.date.getDay();
-    };
-
-    // provide this method only on browsers that already have it
-    if (self.toISOString) {
-      self.toISOString = function() {
-        return padNumber(self.origDate.getUTCFullYear(), 4) + '-' +
-              padNumber(self.origDate.getUTCMonth() + 1, 2) + '-' +
-              padNumber(self.origDate.getUTCDate(), 2) + 'T' +
-              padNumber(self.origDate.getUTCHours(), 2) + ':' +
-              padNumber(self.origDate.getUTCMinutes(), 2) + ':' +
-              padNumber(self.origDate.getUTCSeconds(), 2) + '.' +
-              padNumber(self.origDate.getUTCMilliseconds(), 3) + 'Z'
-      }
-    }
-
-    //hide all methods not implemented in this mock that the Date prototype exposes
-    var unimplementedMethods = ['getMilliseconds', 'getUTCDay',
-        'getYear', 'setDate', 'setFullYear', 'setHours', 'setMilliseconds',
-        'setMinutes', 'setMonth', 'setSeconds', 'setTime', 'setUTCDate', 'setUTCFullYear',
-        'setUTCHours', 'setUTCMilliseconds', 'setUTCMinutes', 'setUTCMonth', 'setUTCSeconds',
-        'setYear', 'toDateString', 'toGMTString', 'toJSON', 'toLocaleFormat', 'toLocaleString',
-        'toLocaleTimeString', 'toSource', 'toString', 'toTimeString', 'toUTCString', 'valueOf'];
-
-    angular.forEach(unimplementedMethods, function(methodName) {
-      self[methodName] = function() {
-        throw Error("Method '" + methodName + "' is not implemented in the TzDate mock");
-      };
-    });
-
-    return self;
-  };
-
-  //make "tzDateInstance instanceof Date" return true
-  angular.mock.TzDate.prototype = Date.prototype;
-})();
-
-
-/**
- * @ngdoc function
- * @name angular.mock.dump
- * @description
- *
- * *NOTE*: this is not an injectable instance, just a globally available function.
- *
- * Method for serializing common angular objects (scope, elements, etc..) into strings, useful for debugging.
- *
- * This method is also available on window, where it can be used to display objects on debug console.
- *
- * @param {*} object - any object to turn into string.
- * @return {string} a serialized string of the argument
- */
-angular.mock.dump = function(object) {
-  return serialize(object);
-
-  function serialize(object) {
-    var out;
-
-    if (angular.isElement(object)) {
-      object = angular.element(object);
-      out = angular.element('<div></div>');
-      angular.forEach(object, function(element) {
-        out.append(angular.element(element).clone());
-      });
-      out = out.html();
-    } else if (angular.isArray(object)) {
-      out = [];
-      angular.forEach(object, function(o) {
-        out.push(serialize(o));
-      });
-      out = '[ ' + out.join(', ') + ' ]';
-    } else if (angular.isObject(object)) {
-      if (angular.isFunction(object.$eval) && angular.isFunction(object.$apply)) {
-        out = serializeScope(object);
-      } else if (object instanceof Error) {
-        out = object.stack || ('' + object.name + ': ' + object.message);
-      } else {
-        out = angular.toJson(object, true);
-      }
-    } else {
-      out = String(object);
-    }
-
-    return out;
-  }
-
-  function serializeScope(scope, offset) {
-    offset = offset ||  '  ';
-    var log = [offset + 'Scope(' + scope.$id + '): {'];
-    for ( var key in scope ) {
-      if (scope.hasOwnProperty(key) && !key.match(/^(\$|this)/)) {
-        log.push('  ' + key + ': ' + angular.toJson(scope[key]));
-      }
-    }
-    var child = scope.$$childHead;
-    while(child) {
-      log.push(serializeScope(child, offset + '  '));
-      child = child.$$nextSibling;
-    }
-    log.push('}');
-    return log.join('\n' + offset);
-  }
-};
-
-/**
- * @ngdoc object
- * @name ngMock.$httpBackend
- * @description
- * Fake HTTP backend implementation suitable for unit testing application that use the
- * {@link ng.$http $http service}.
- *
- * *Note*: For fake http backend implementation suitable for end-to-end testing or backend-less
- * development please see {@link ngMockE2E.$httpBackend e2e $httpBackend mock}.
- *
- * During unit testing, we want our unit tests to run quickly and have no external dependencies so
- * we don’t want to send {@link https://developer.mozilla.org/en/xmlhttprequest XHR} or
- * {@link http://en.wikipedia.org/wiki/JSONP JSONP} requests to a real server. All we really need is
- * to verify whether a certain request has been sent or not, or alternatively just let the
- * application make requests, respond with pre-trained responses and assert that the end result is
- * what we expect it to be.
- *
- * This mock implementation can be used to respond with static or dynamic responses via the
- * `expect` and `when` apis and their shortcuts (`expectGET`, `whenPOST`, etc).
- *
- * When an Angular application needs some data from a server, it calls the $http service, which
- * sends the request to a real server using $httpBackend service. With dependency injection, it is
- * easy to inject $httpBackend mock (which has the same API as $httpBackend) and use it to verify
- * the requests and respond with some testing data without sending a request to real server.
- *
- * There are two ways to specify what test data should be returned as http responses by the mock
- * backend when the code under test makes http requests:
- *
- * - `$httpBackend.expect` - specifies a request expectation
- * - `$httpBackend.when` - specifies a backend definition
- *
- *
- * # Request Expectations vs Backend Definitions
- *
- * Request expectations provide a way to make assertions about requests made by the application and
- * to define responses for those requests. The test will fail if the expected requests are not made
- * or they are made in the wrong order.
- *
- * Backend definitions allow you to define a fake backend for your application which doesn't assert
- * if a particular request was made or not, it just returns a trained response if a request is made.
- * The test will pass whether or not the request gets made during testing.
- *
- *
- * <table class="table">
- *   <tr><th width="220px"></th><th>Request expectations</th><th>Backend definitions</th></tr>
- *   <tr>
- *     <th>Syntax</th>
- *     <td>.expect(...).respond(...)</td>
- *     <td>.when(...).respond(...)</td>
- *   </tr>
- *   <tr>
- *     <th>Typical usage</th>
- *     <td>strict unit tests</td>
- *     <td>loose (black-box) unit testing</td>
- *   </tr>
- *   <tr>
- *     <th>Fulfills multiple requests</th>
- *     <td>NO</td>
- *     <td>YES</td>
- *   </tr>
- *   <tr>
- *     <th>Order of requests matters</th>
- *     <td>YES</td>
- *     <td>NO</td>
- *   </tr>
- *   <tr>
- *     <th>Request required</th>
- *     <td>YES</td>
- *     <td>NO</td>
- *   </tr>
- *   <tr>
- *     <th>Response required</th>
- *     <td>optional (see below)</td>
- *     <td>YES</td>
- *   </tr>
- * </table>
- *
- * In cases where both backend definitions and request expectations are specified during unit
- * testing, the request expectations are evaluated first.
- *
- * If a request expectation has no response specified, the algorithm will search your backend
- * definitions for an appropriate response.
- *
- * If a request didn't match any expectation or if the expectation doesn't have the response
- * defined, the backend definitions are evaluated in sequential order to see if any of them match
- * the request. The response from the first matched definition is returned.
- *
- *
- * # Flushing HTTP requests
- *
- * The $httpBackend used in production, always responds to requests with responses asynchronously.
- * If we preserved this behavior in unit testing, we'd have to create async unit tests, which are
- * hard to write, follow and maintain. At the same time the testing mock, can't respond
- * synchronously because that would change the execution of the code under test. For this reason the
- * mock $httpBackend has a `flush()` method, which allows the test to explicitly flush pending
- * requests and thus preserving the async api of the backend, while allowing the test to execute
- * synchronously.
- *
- *
- * # Unit testing with mock $httpBackend
- *
- * <pre>
-   // controller
-   function MyController($scope, $http) {
-     $http.get('/auth.py').success(function(data) {
-       $scope.user = data;
-     });
-
-     this.saveMessage = function(message) {
-       $scope.status = 'Saving...';
-       $http.post('/add-msg.py', message).success(function(response) {
-         $scope.status = '';
-       }).error(function() {
-         $scope.status = 'ERROR!';
-       });
-     };
-   }
-
-   // testing controller
-   var $http;
-
-   beforeEach(inject(function($injector) {
-     $httpBackend = $injector.get('$httpBackend');
-
-     // backend definition common for all tests
-     $httpBackend.when('GET', '/auth.py').respond({userId: 'userX'}, {'A-Token': 'xxx'});
-   }));
-
-
-   afterEach(function() {
-     $httpBackend.verifyNoOutstandingExpectation();
-     $httpBackend.verifyNoOutstandingRequest();
-   });
-
-
-   it('should fetch authentication token', function() {
-     $httpBackend.expectGET('/auth.py');
-     var controller = scope.$new(MyController);
-     $httpBackend.flush();
-   });
-
-
-   it('should send msg to server', function() {
-     // now you don’t care about the authentication, but
-     // the controller will still send the request and
-     // $httpBackend will respond without you having to
-     // specify the expectation and response for this request
-     $httpBackend.expectPOST('/add-msg.py', 'message content').respond(201, '');
-
-     var controller = scope.$new(MyController);
-     $httpBackend.flush();
-     controller.saveMessage('message content');
-     expect(controller.status).toBe('Saving...');
-     $httpBackend.flush();
-     expect(controller.status).toBe('');
-   });
-
-
-   it('should send auth header', function() {
-     $httpBackend.expectPOST('/add-msg.py', undefined, function(headers) {
-       // check if the header was send, if it wasn't the expectation won't
-       // match the request and the test will fail
-       return headers['Authorization'] == 'xxx';
-     }).respond(201, '');
-
-     var controller = scope.$new(MyController);
-     controller.saveMessage('whatever');
-     $httpBackend.flush();
-   });
-   </pre>
- */
-angular.mock.$HttpBackendProvider = function() {
-  this.$get = [createHttpBackendMock];
-};
-
-/**
- * General factory function for $httpBackend mock.
- * Returns instance for unit testing (when no arguments specified):
- *   - passing through is disabled
- *   - auto flushing is disabled
- *
- * Returns instance for e2e testing (when `$delegate` and `$browser` specified):
- *   - passing through (delegating request to real backend) is enabled
- *   - auto flushing is enabled
- *
- * @param {Object=} $delegate Real $httpBackend instance (allow passing through if specified)
- * @param {Object=} $browser Auto-flushing enabled if specified
- * @return {Object} Instance of $httpBackend mock
- */
-function createHttpBackendMock($delegate, $browser) {
-  var definitions = [],
-      expectations = [],
-      responses = [],
-      responsesPush = angular.bind(responses, responses.push);
-
-  function createResponse(status, data, headers) {
-    if (angular.isFunction(status)) return status;
-
-    return function() {
-      return angular.isNumber(status)
-          ? [status, data, headers]
-          : [200, status, data];
-    };
-  }
-
-  // TODO(vojta): change params to: method, url, data, headers, callback
-  function $httpBackend(method, url, data, callback, headers) {
-    var xhr = new MockXhr(),
-        expectation = expectations[0],
-        wasExpected = false;
-
-    function prettyPrint(data) {
-      return (angular.isString(data) || angular.isFunction(data) || data instanceof RegExp)
-          ? data
-          : angular.toJson(data);
-    }
-
-    if (expectation && expectation.match(method, url)) {
-      if (!expectation.matchData(data))
-        throw Error('Expected ' + expectation + ' with different data\n' +
-            'EXPECTED: ' + prettyPrint(expectation.data) + '\nGOT:      ' + data);
-
-      if (!expectation.matchHeaders(headers))
-        throw Error('Expected ' + expectation + ' with different headers\n' +
-            'EXPECTED: ' + prettyPrint(expectation.headers) + '\nGOT:      ' +
-            prettyPrint(headers));
-
-      expectations.shift();
-
-      if (expectation.response) {
-        responses.push(function() {
-          var response = expectation.response(method, url, data, headers);
-          xhr.$$respHeaders = response[2];
-          callback(response[0], response[1], xhr.getAllResponseHeaders());
-        });
-        return;
-      }
-      wasExpected = true;
-    }
-
-    var i = -1, definition;
-    while ((definition = definitions[++i])) {
-      if (definition.match(method, url, data, headers || {})) {
-        if (definition.response) {
-          // if $browser specified, we do auto flush all requests
-          ($browser ? $browser.defer : responsesPush)(function() {
-            var response = definition.response(method, url, data, headers);
-            xhr.$$respHeaders = response[2];
-            callback(response[0], response[1], xhr.getAllResponseHeaders());
-          });
-        } else if (definition.passThrough) {
-          $delegate(method, url, data, callback, headers);
-        } else throw Error('No response defined !');
-        return;
-      }
-    }
-    throw wasExpected ?
-        Error('No response defined !') :
-        Error('Unexpected request: ' + method + ' ' + url + '\n' +
-              (expectation ? 'Expected ' + expectation : 'No more request expected'));
-  }
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#when
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new backend definition.
-   *
-   * @param {string} method HTTP method.
-   * @param {string|RegExp} url HTTP url.
-   * @param {(string|RegExp)=} data HTTP request body.
-   * @param {(Object|function(Object))=} headers HTTP headers or function that receives http header
-   *   object and returns true if the headers match the current definition.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *   request is handled.
-   *
-   *  - respond – `{function([status,] data[, headers])|function(function(method, url, data, headers)}`
-   *    – The respond method takes a set of static data to be returned or a function that can return
-   *    an array containing response status (number), response data (string) and response headers
-   *    (Object).
-   */
-  $httpBackend.when = function(method, url, data, headers) {
-    var definition = new MockHttpExpectation(method, url, data, headers),
-        chain = {
-          respond: function(status, data, headers) {
-            definition.response = createResponse(status, data, headers);
-          }
-        };
-
-    if ($browser) {
-      chain.passThrough = function() {
-        definition.passThrough = true;
-      };
-    }
-
-    definitions.push(definition);
-    return chain;
-  };
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#whenGET
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new backend definition for GET requests. For more info see `when()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(Object|function(Object))=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   * request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#whenHEAD
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new backend definition for HEAD requests. For more info see `when()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(Object|function(Object))=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   * request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#whenDELETE
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new backend definition for DELETE requests. For more info see `when()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(Object|function(Object))=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   * request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#whenPOST
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new backend definition for POST requests. For more info see `when()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(string|RegExp)=} data HTTP request body.
-   * @param {(Object|function(Object))=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   * request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#whenPUT
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new backend definition for PUT requests.  For more info see `when()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(string|RegExp)=} data HTTP request body.
-   * @param {(Object|function(Object))=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   * request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#whenJSONP
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new backend definition for JSONP requests. For more info see `when()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   * request is handled.
-   */
-  createShortMethods('when');
-
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expect
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation.
-   *
-   * @param {string} method HTTP method.
-   * @param {string|RegExp} url HTTP url.
-   * @param {(string|RegExp)=} data HTTP request body.
-   * @param {(Object|function(Object))=} headers HTTP headers or function that receives http header
-   *   object and returns true if the headers match the current expectation.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *  request is handled.
-   *
-   *  - respond – `{function([status,] data[, headers])|function(function(method, url, data, headers)}`
-   *    – The respond method takes a set of static data to be returned or a function that can return
-   *    an array containing response status (number), response data (string) and response headers
-   *    (Object).
-   */
-  $httpBackend.expect = function(method, url, data, headers) {
-    var expectation = new MockHttpExpectation(method, url, data, headers);
-    expectations.push(expectation);
-    return {
-      respond: function(status, data, headers) {
-        expectation.response = createResponse(status, data, headers);
-      }
-    };
-  };
-
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expectGET
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation for GET requests. For more info see `expect()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {Object=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   * request is handled. See #expect for more info.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expectHEAD
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation for HEAD requests. For more info see `expect()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {Object=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *   request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expectDELETE
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation for DELETE requests. For more info see `expect()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {Object=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *   request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expectPOST
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation for POST requests. For more info see `expect()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(string|RegExp)=} data HTTP request body.
-   * @param {Object=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *   request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expectPUT
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation for PUT requests. For more info see `expect()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(string|RegExp)=} data HTTP request body.
-   * @param {Object=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *   request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expectPATCH
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation for PATCH requests. For more info see `expect()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @param {(string|RegExp)=} data HTTP request body.
-   * @param {Object=} headers HTTP headers.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *   request is handled.
-   */
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#expectJSONP
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Creates a new request expectation for JSONP requests. For more info see `expect()`.
-   *
-   * @param {string|RegExp} url HTTP url.
-   * @returns {requestHandler} Returns an object with `respond` method that control how a matched
-   *   request is handled.
-   */
-  createShortMethods('expect');
-
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#flush
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Flushes all pending requests using the trained responses.
-   *
-   * @param {number=} count Number of responses to flush (in the order they arrived). If undefined,
-   *   all pending requests will be flushed. If there are no pending requests when the flush method
-   *   is called an exception is thrown (as this typically a sign of programming error).
-   */
-  $httpBackend.flush = function(count) {
-    if (!responses.length) throw Error('No pending request to flush !');
-
-    if (angular.isDefined(count)) {
-      while (count--) {
-        if (!responses.length) throw Error('No more pending request to flush !');
-        responses.shift()();
-      }
-    } else {
-      while (responses.length) {
-        responses.shift()();
-      }
-    }
-    $httpBackend.verifyNoOutstandingExpectation();
-  };
-
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#verifyNoOutstandingExpectation
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Verifies that all of the requests defined via the `expect` api were made. If any of the
-   * requests were not made, verifyNoOutstandingExpectation throws an exception.
-   *
-   * Typically, you would call this method following each test case that asserts requests using an
-   * "afterEach" clause.
-   *
-   * <pre>
-   *   afterEach($httpBackend.verifyExpectations);
-   * </pre>
-   */
-  $httpBackend.verifyNoOutstandingExpectation = function() {
-    if (expectations.length) {
-      throw Error('Unsatisfied requests: ' + expectations.join(', '));
-    }
-  };
-
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#verifyNoOutstandingRequest
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Verifies that there are no outstanding requests that need to be flushed.
-   *
-   * Typically, you would call this method following each test case that asserts requests using an
-   * "afterEach" clause.
-   *
-   * <pre>
-   *   afterEach($httpBackend.verifyNoOutstandingRequest);
-   * </pre>
-   */
-  $httpBackend.verifyNoOutstandingRequest = function() {
-    if (responses.length) {
-      throw Error('Unflushed requests: ' + responses.length);
-    }
-  };
-
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$httpBackend#resetExpectations
-   * @methodOf ngMock.$httpBackend
-   * @description
-   * Resets all request expectations, but preserves all backend definitions. Typically, you would
-   * call resetExpectations during a multiple-phase test when you want to reuse the same instance of
-   * $httpBackend mock.
-   */
-  $httpBackend.resetExpectations = function() {
-    expectations.length = 0;
-    responses.length = 0;
-  };
-
-  return $httpBackend;
-
-
-  function createShortMethods(prefix) {
-    angular.forEach(['GET', 'DELETE', 'JSONP'], function(method) {
-     $httpBackend[prefix + method] = function(url, headers) {
-       return $httpBackend[prefix](method, url, undefined, headers)
-     }
-    });
-
-    angular.forEach(['PUT', 'POST', 'PATCH'], function(method) {
-      $httpBackend[prefix + method] = function(url, data, headers) {
-        return $httpBackend[prefix](method, url, data, headers)
-      }
-    });
-  }
-}
-
-function MockHttpExpectation(method, url, data, headers) {
-
-  this.data = data;
-  this.headers = headers;
-
-  this.match = function(m, u, d, h) {
-    if (method != m) return false;
-    if (!this.matchUrl(u)) return false;
-    if (angular.isDefined(d) && !this.matchData(d)) return false;
-    if (angular.isDefined(h) && !this.matchHeaders(h)) return false;
-    return true;
-  };
-
-  this.matchUrl = function(u) {
-    if (!url) return true;
-    if (angular.isFunction(url.test)) return url.test(u);
-    return url == u;
-  };
-
-  this.matchHeaders = function(h) {
-    if (angular.isUndefined(headers)) return true;
-    if (angular.isFunction(headers)) return headers(h);
-    return angular.equals(headers, h);
-  };
-
-  this.matchData = function(d) {
-    if (angular.isUndefined(data)) return true;
-    if (data && angular.isFunction(data.test)) return data.test(d);
-    if (data && !angular.isString(data)) return angular.toJson(data) == d;
-    return data == d;
-  };
-
-  this.toString = function() {
-    return method + ' ' + url;
-  };
-}
-
-function MockXhr() {
-
-  // hack for testing $http, $httpBackend
-  MockXhr.$$lastInstance = this;
-
-  this.open = function(method, url, async) {
-    this.$$method = method;
-    this.$$url = url;
-    this.$$async = async;
-    this.$$reqHeaders = {};
-    this.$$respHeaders = {};
-  };
-
-  this.send = function(data) {
-    this.$$data = data;
-  };
-
-  this.setRequestHeader = function(key, value) {
-    this.$$reqHeaders[key] = value;
-  };
-
-  this.getResponseHeader = function(name) {
-    // the lookup must be case insensitive, that's why we try two quick lookups and full scan at last
-    var header = this.$$respHeaders[name];
-    if (header) return header;
-
-    name = angular.lowercase(name);
-    header = this.$$respHeaders[name];
-    if (header) return header;
-
-    header = undefined;
-    angular.forEach(this.$$respHeaders, function(headerVal, headerName) {
-      if (!header && angular.lowercase(headerName) == name) header = headerVal;
-    });
-    return header;
-  };
-
-  this.getAllResponseHeaders = function() {
-    var lines = [];
-
-    angular.forEach(this.$$respHeaders, function(value, key) {
-      lines.push(key + ': ' + value);
-    });
-    return lines.join('\n');
-  };
-
-  this.abort = angular.noop;
-}
-
-
-/**
- * @ngdoc function
- * @name ngMock.$timeout
- * @description
- *
- * This service is just a simple decorator for {@link ng.$timeout $timeout} service
- * that adds a "flush" and "verifyNoPendingTasks" methods.
- */ 
-
-angular.mock.$TimeoutDecorator = function($delegate, $browser) {
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$timeout#flush
-   * @methodOf ngMock.$timeout
-   * @description
-   *
-   * Flushes the queue of pending tasks.
-   */
-  $delegate.flush = function() {
-    $browser.defer.flush();
-  };
-
-  /**
-   * @ngdoc method
-   * @name ngMock.$timeout#verifyNoPendingTasks
-   * @methodOf ngMock.$timeout
-   * @description
-   *
-   * Verifies that there are no pending tasks that need to be flushed.
-   */
-  $delegate.verifyNoPendingTasks = function() {
-    if ($browser.deferredFns.length) {
-      throw Error('Deferred tasks to flush (' + $browser.deferredFns.length + '): ' +
-          formatPendingTasksAsString($browser.deferredFns));
-    }
-  };
-
-  function formatPendingTasksAsString(tasks) {
-    var result = [];
-    angular.forEach(tasks, function(task) {
-      result.push('{id: ' + task.id + ', ' + 'time: ' + task.time + '}');
-    });
-
-    return result.join(', ');
-  }
-
-  return $delegate;
-};
-
-/**
- *
- */
-angular.mock.$RootElementProvider = function() {
-  this.$get = function() {
-    return angular.element('<div ng-app></div>');
-  }
-};
-
-/**
- * @ngdoc overview
- * @name ngMock
- * @description
- *
- * The `ngMock` is an angular module which is used with `ng` module and adds unit-test configuration as well as useful
- * mocks to the {@link AUTO.$injector $injector}.
- */
-angular.module('ngMock', ['ng']).provider({
-  $browser: angular.mock.$BrowserProvider,
-  $exceptionHandler: angular.mock.$ExceptionHandlerProvider,
-  $log: angular.mock.$LogProvider,
-  $httpBackend: angular.mock.$HttpBackendProvider,
-  $rootElement: angular.mock.$RootElementProvider
-}).config(function($provide) {
-  $provide.decorator('$timeout', angular.mock.$TimeoutDecorator);
-});
-
-/**
- * @ngdoc overview
- * @name ngMockE2E
- * @description
- *
- * The `ngMockE2E` is an angular module which contains mocks suitable for end-to-end testing.
- * Currently there is only one mock present in this module -
- * the {@link ngMockE2E.$httpBackend e2e $httpBackend} mock.
- */
-angular.module('ngMockE2E', ['ng']).config(function($provide) {
-  $provide.decorator('$httpBackend', angular.mock.e2e.$httpBackendDecorator);
-});
-
-/**
- * @ngdoc object
- * @name ngMockE2E.$httpBackend
- * @description
- * Fake HTTP backend implementation suitable for end-to-end testing or backend-less development of
- * applications that use the {@link ng.$http $http service}.
- *
- * *Note*: For fake http backend implementation suitable for unit testing please see
- * {@link ngMock.$httpBackend unit-testing $httpBackend mock}.
- *
- * This implementation can be used to respond with static or dynamic responses via the `when` api
- * and its shortcuts (`whenGET`, `whenPOST`, etc) and optionally pass through requests to the
- * real $httpBackend for specific requests (e.g. to interact with certain remote apis or to fetch
- * templates from a webserver).
- *
- * As opposed to unit-testing, in an end-to-end testing scenario or in scenario when an application
- * is being developed with the real backend api replaced with a mock, it is often desirable for
- * certain category of requests to bypass the mock and issue a real http request (e.g. to fetch
- * templates or static files from the webserver). To configure the backend with this behavior
- * use the `passThrough` request handler of `when` instead of `respond`.
- *
- * Additionally, we don't want to manually have to flush mocked out requests like we do during unit
- * testing. For this reason the e2e $httpBackend automatically flushes mocked out requests
- * automatically, closely simulating the behavior of the XMLHttpRequest object.
- *
- * To setup the application to run with this http backend, you have to create a module that depends
- * on the `ngMockE2E` and your application modules and defines the fake backend:
- *
- * <pre>
- *   myAppDev = angular.module('myAppDev', ['myApp', 'ngMockE2E']);
- *   myAppDev.run(function($httpBackend) {
- *     phones = [{name: 'phone1'}, {name: 'phone2'}];
- *
- *     // returns the current list of phones
- *     $httpBackend.whenGET('/phones').respond(phones);
- *
- *     // adds a new phone to the phones array
- *     $httpBackend.whenPOST('/phones').respond(function(method, url, data) {
- *       phones.push(angular.fromJSON(data));
- *     });
- *     $httpBackend.whenGET(/^\/templates\//).passThrough();
- *     //...
- *   });
- * </pre>
- *
- * Afterwards, bootstrap your app with this new module.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#when
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition.
- *
- * @param {string} method HTTP method.
- * @param {string|RegExp} url HTTP url.
- * @param {(string|RegExp)=} data HTTP request body.
- * @param {(Object|function(Object))=} headers HTTP headers or function that receives http header
- *   object and returns true if the headers match the current definition.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- *
- *  - respond – `{function([status,] data[, headers])|function(function(method, url, data, headers)}`
- *    – The respond method takes a set of static data to be returned or a function that can return
- *    an array containing response status (number), response data (string) and response headers
- *    (Object).
- *  - passThrough – `{function()}` – Any request matching a backend definition with `passThrough`
- *    handler, will be pass through to the real backend (an XHR request will be made to the
- *    server.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#whenGET
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition for GET requests. For more info see `when()`.
- *
- * @param {string|RegExp} url HTTP url.
- * @param {(Object|function(Object))=} headers HTTP headers.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#whenHEAD
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition for HEAD requests. For more info see `when()`.
- *
- * @param {string|RegExp} url HTTP url.
- * @param {(Object|function(Object))=} headers HTTP headers.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#whenDELETE
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition for DELETE requests. For more info see `when()`.
- *
- * @param {string|RegExp} url HTTP url.
- * @param {(Object|function(Object))=} headers HTTP headers.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#whenPOST
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition for POST requests. For more info see `when()`.
- *
- * @param {string|RegExp} url HTTP url.
- * @param {(string|RegExp)=} data HTTP request body.
- * @param {(Object|function(Object))=} headers HTTP headers.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#whenPUT
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition for PUT requests.  For more info see `when()`.
- *
- * @param {string|RegExp} url HTTP url.
- * @param {(string|RegExp)=} data HTTP request body.
- * @param {(Object|function(Object))=} headers HTTP headers.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#whenPATCH
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition for PATCH requests.  For more info see `when()`.
- *
- * @param {string|RegExp} url HTTP url.
- * @param {(string|RegExp)=} data HTTP request body.
- * @param {(Object|function(Object))=} headers HTTP headers.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- */
-
-/**
- * @ngdoc method
- * @name ngMockE2E.$httpBackend#whenJSONP
- * @methodOf ngMockE2E.$httpBackend
- * @description
- * Creates a new backend definition for JSONP requests. For more info see `when()`.
- *
- * @param {string|RegExp} url HTTP url.
- * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
- *   control how a matched request is handled.
- */
-angular.mock.e2e = {};
-angular.mock.e2e.$httpBackendDecorator = ['$delegate', '$browser', createHttpBackendMock];
-
-
-angular.mock.clearDataCache = function() {
-  var key,
-      cache = angular.element.cache;
-
-  for(key in cache) {
-    if (cache.hasOwnProperty(key)) {
-      var handle = cache[key].handle;
-
-      handle && angular.element(handle.elem).unbind();
-      delete cache[key];
-    }
-  }
-};
-
-
-window.jstestdriver && (function(window) {
-  /**
-   * Global method to output any number of objects into JSTD console. Useful for debugging.
-   */
-  window.dump = function() {
-    var args = [];
-    angular.forEach(arguments, function(arg) {
-      args.push(angular.mock.dump(arg));
-    });
-    jstestdriver.console.log.apply(jstestdriver.console, args);
-    if (window.console) {
-      window.console.log.apply(window.console, args);
-    }
-  };
-})(window);
-
-
-(window.jasmine || window.mocha) && (function(window) {
-
-  var currentSpec = null;
-
-  beforeEach(function() {
-    currentSpec = this;
-  });
-
-  afterEach(function() {
-    var injector = currentSpec.$injector;
-
-    currentSpec.$injector = null;
-    currentSpec.$modules = null;
-    currentSpec = null;
-
-    if (injector) {
-      injector.get('$rootElement').unbind();
-      injector.get('$browser').pollFns.length = 0;
-    }
-
-    angular.mock.clearDataCache();
-
-    // clean up jquery's fragment cache
-    angular.forEach(angular.element.fragments, function(val, key) {
-      delete angular.element.fragments[key];
-    });
-
-    MockXhr.$$lastInstance = null;
-
-    angular.forEach(angular.callbacks, function(val, key) {
-      delete angular.callbacks[key];
-    });
-    angular.callbacks.counter = 0;
-  });
-
-  function isSpecRunning() {
-    return currentSpec && currentSpec.queue.running;
-  }
-
-  /**
-   * @ngdoc function
-   * @name angular.mock.module
-   * @description
-   *
-   * *NOTE*: This is function is also published on window for easy access.<br>
-   * *NOTE*: Only available with {@link http://pivotal.github.com/jasmine/ jasmine}.
-   *
-   * This function registers a module configuration code. It collects the configuration information
-   * which will be used when the injector is created by {@link angular.mock.inject inject}.
-   *
-   * See {@link angular.mock.inject inject} for usage example
-   *
-   * @param {...(string|Function)} fns any number of modules which are represented as string
-   *        aliases or as anonymous module initialization functions. The modules are used to
-   *        configure the injector. The 'ng' and 'ngMock' modules are automatically loaded.
-   */
-  window.module = angular.mock.module = function() {
-    var moduleFns = Array.prototype.slice.call(arguments, 0);
-    return isSpecRunning() ? workFn() : workFn;
-    /////////////////////
-    function workFn() {
-      if (currentSpec.$injector) {
-        throw Error('Injector already created, can not register a module!');
-      } else {
-        var modules = currentSpec.$modules || (currentSpec.$modules = []);
-        angular.forEach(moduleFns, function(module) {
-          modules.push(module);
-        });
-      }
-    }
-  };
-
-  /**
-   * @ngdoc function
-   * @name angular.mock.inject
-   * @description
-   *
-   * *NOTE*: This is function is also published on window for easy access.<br>
-   * *NOTE*: Only available with {@link http://pivotal.github.com/jasmine/ jasmine}.
-   *
-   * The inject function wraps a function into an injectable function. The inject() creates new
-   * instance of {@link AUTO.$injector $injector} per test, which is then used for
-   * resolving references.
-   *
-   * See also {@link angular.mock.module module}
-   *
-   * Example of what a typical jasmine tests looks like with the inject method.
-   * <pre>
-   *
-   *   angular.module('myApplicationModule', [])
-   *       .value('mode', 'app')
-   *       .value('version', 'v1.0.1');
-   *
-   *
-   *   describe('MyApp', function() {
-   *
-   *     // You need to load modules that you want to test,
-   *     // it loads only the "ng" module by default.
-   *     beforeEach(module('myApplicationModule'));
-   *
-   *
-   *     // inject() is used to inject arguments of all given functions
-   *     it('should provide a version', inject(function(mode, version) {
-   *       expect(version).toEqual('v1.0.1');
-   *       expect(mode).toEqual('app');
-   *     }));
-   *
-   *
-   *     // The inject and module method can also be used inside of the it or beforeEach
-   *     it('should override a version and test the new version is injected', function() {
-   *       // module() takes functions or strings (module aliases)
-   *       module(function($provide) {
-   *         $provide.value('version', 'overridden'); // override version here
-   *       });
-   *
-   *       inject(function(version) {
-   *         expect(version).toEqual('overridden');
-   *       });
-   *     ));
-   *   });
-   *
-   * </pre>
-   *
-   * @param {...Function} fns any number of functions which will be injected using the injector.
-   */
-  window.inject = angular.mock.inject = function() {
-    var blockFns = Array.prototype.slice.call(arguments, 0);
-    var errorForStack = new Error('Declaration Location');
-    return isSpecRunning() ? workFn() : workFn;
-    /////////////////////
-    function workFn() {
-      var modules = currentSpec.$modules || [];
-
-      modules.unshift('ngMock');
-      modules.unshift('ng');
-      var injector = currentSpec.$injector;
-      if (!injector) {
-        injector = currentSpec.$injector = angular.injector(modules);
-      }
-      for(var i = 0, ii = blockFns.length; i < ii; i++) {
-        try {
-          injector.invoke(blockFns[i] || angular.noop, this);
-        } catch (e) {
-          if(e.stack) e.stack +=  '\n' + errorForStack.stack;
-          throw e;
-        } finally {
-          errorForStack = null;
-        }
-      }
-    }
-  };
-})(window);
-
-},{}],2:[function(require,module,exports){
+'use strict';
 var angular = require('angular');
 
-var stickyApp = angular.module('stickyApp', []);
+var stickyApp = angular.module('stickyApp', [require('satellizer')])
+  .config(function($authProvider) {
 
+    $authProvider.google({
+      clientId: '1756204919-rb2dt1t62tecum2quucdcjljcouncoge.apps.googleusercontent.com'
+    });
+  });
 
-stickyApp.service('$webstorage', function() {
-    this.getposts = function() {
-      var value = localStorage.getItem('posts');
-      // If first time visiting or it is empty
-      if (!value || value == "[]") {
-        return [{id: 1, text: 'Replace me!'}];
-      }
-      else {
-        return angular.fromJson(value);
-      }
+stickyApp.controller('stickyPosts', function ($scope, $auth) {
+
+  $scope.posts = [];
+
+  $scope.getLoginText = function() {
+    if (!$auth.getToken())
+      return "Login";
+    else {
+      return "Signed in";
     }
+  }
 
-    this.saveposts = function(posts) {
-        localStorage.setItem('posts', angular.toJson(posts));
-    }
-});
+  $scope.authenticate = function(provider) {
+    $auth.authenticate(provider);
+    console.log('Token', $auth.getToken())
+  }
 
-stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
-
-  $scope.posts = $webstorage.getposts();
 
   var getId = function() {
       var id = 1;
@@ -1804,10 +39,35 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
       return id;
   };
 
+
+
+/*
   $scope.add = function() {
     $scope.posts.push({id: getId(), text: ''});
     $webstorage.saveposts($scope.posts);
   }
+
+  $scope.getposts = function(googleId) {
+    $http( {
+      method: 'GET',
+      url: '/post/get',
+      data: {googleId: googleId},
+    }).then(function successCallback(response) {
+
+    }, function errorCallback(response) {
+
+    });
+  }
+  */
+
+  $scope.savepost = function(googleId) {
+    $http( {
+      method: 'POST',
+      url: '/post/save',
+      data: {googleId: googleId, posts: $scope.posts},
+    })
+  }
+
 
   $scope.save = function(id, text) {
     var i;
@@ -1816,7 +76,7 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
         $scope.posts[i].text = text;
       }
     }
-    $webstorage.saveposts($scope.posts);
+    //$webstorage.saveposts($scope.posts);
   }
 
   $scope.delete = function(id) {
@@ -1826,13 +86,13 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
         $scope.posts.splice(i, 1);
       }
     }
-    $webstorage.saveposts($scope.posts);
+    //$webstorage.saveposts($scope.posts);
   }
 
 
 });
 
-},{"angular":4}],3:[function(require,module,exports){
+},{"angular":3,"satellizer":4}],2:[function(require,module,exports){
 /**
  * @license AngularJS v1.5.0
  * (c) 2010-2016 Google, Inc. http://angularjs.org
@@ -32261,8 +30521,971 @@ $provide.value("$locale", {
 })(window, document);
 
 !window.angular.$$csp().noInlineStyle && window.angular.element(document.head).prepend('<style type="text/css">@charset "UTF-8";[ng\\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}</style>');
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 require('./angular');
 module.exports = angular;
 
-},{"./angular":3}]},{},[2,1]);
+},{"./angular":2}],4:[function(require,module,exports){
+/**
+ * Satellizer 0.14.0
+ * (c) 2016 Sahat Yalkabov
+ * License: MIT
+ */
+
+// CommonJS package manager support.
+if (typeof module !== 'undefined' && typeof exports !== 'undefined' && module.exports === exports) {
+  module.exports = 'satellizer';
+}
+
+(function(window, angular, undefined) {
+  'use strict';
+
+  if (!window.location.origin) {
+    window.location.origin = window.location.protocol + '//' + window.location.hostname + (window.location.port ? (':' + window.location.port) : '');
+  }
+
+  angular.module('satellizer', [])
+    .constant('SatellizerConfig', {
+      httpInterceptor: function() { return true; },
+      withCredentials: false,
+      tokenRoot: null,
+      baseUrl: '/',
+      loginUrl: '/auth/login',
+      signupUrl: '/auth/signup',
+      unlinkUrl: '/auth/unlink/',
+      tokenName: 'token',
+      tokenPrefix: 'satellizer',
+      authHeader: 'Authorization',
+      authToken: 'Bearer',
+      storageType: 'localStorage',
+      providers: {
+        facebook: {
+          name: 'facebook',
+          url: '/auth/facebook',
+          authorizationEndpoint: 'https://www.facebook.com/v2.5/dialog/oauth',
+          redirectUri: window.location.origin + '/',
+          requiredUrlParams: ['display', 'scope'],
+          scope: ['email'],
+          scopeDelimiter: ',',
+          display: 'popup',
+          oauthType: '2.0',
+          popupOptions: { width: 580, height: 400 }
+        },
+        google: {
+          name: 'google',
+          url: '/auth/google',
+          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/auth',
+          redirectUri: window.location.origin,
+          requiredUrlParams: ['scope'],
+          optionalUrlParams: ['display'],
+          scope: ['profile', 'email'],
+          scopePrefix: 'openid',
+          scopeDelimiter: ' ',
+          display: 'popup',
+          oauthType: '2.0',
+          popupOptions: { width: 452, height: 633 }
+        },
+        github: {
+          name: 'github',
+          url: '/auth/github',
+          authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+          redirectUri: window.location.origin,
+          optionalUrlParams: ['scope'],
+          scope: ['user:email'],
+          scopeDelimiter: ' ',
+          oauthType: '2.0',
+          popupOptions: { width: 1020, height: 618 }
+        },
+        instagram: {
+          name: 'instagram',
+          url: '/auth/instagram',
+          authorizationEndpoint: 'https://api.instagram.com/oauth/authorize',
+          redirectUri: window.location.origin,
+          requiredUrlParams: ['scope'],
+          scope: ['basic'],
+          scopeDelimiter: '+',
+          oauthType: '2.0'
+        },
+        linkedin: {
+          name: 'linkedin',
+          url: '/auth/linkedin',
+          authorizationEndpoint: 'https://www.linkedin.com/uas/oauth2/authorization',
+          redirectUri: window.location.origin,
+          requiredUrlParams: ['state'],
+          scope: ['r_emailaddress'],
+          scopeDelimiter: ' ',
+          state: 'STATE',
+          oauthType: '2.0',
+          popupOptions: { width: 527, height: 582 }
+        },
+        twitter: {
+          name: 'twitter',
+          url: '/auth/twitter',
+          authorizationEndpoint: 'https://api.twitter.com/oauth/authenticate',
+          redirectUri: window.location.origin,
+          oauthType: '1.0',
+          popupOptions: { width: 495, height: 645 }
+        },
+        twitch: {
+          name: 'twitch',
+          url: '/auth/twitch',
+          authorizationEndpoint: 'https://api.twitch.tv/kraken/oauth2/authorize',
+          redirectUri: window.location.origin,
+          requiredUrlParams: ['scope'],
+          scope: ['user_read'],
+          scopeDelimiter: ' ',
+          display: 'popup',
+          oauthType: '2.0',
+          popupOptions: { width: 500, height: 560 }
+        },
+        live: {
+          name: 'live',
+          url: '/auth/live',
+          authorizationEndpoint: 'https://login.live.com/oauth20_authorize.srf',
+          redirectUri: window.location.origin,
+          requiredUrlParams: ['display', 'scope'],
+          scope: ['wl.emails'],
+          scopeDelimiter: ' ',
+          display: 'popup',
+          oauthType: '2.0',
+          popupOptions: { width: 500, height: 560 }
+        },
+        yahoo: {
+          name: 'yahoo',
+          url: '/auth/yahoo',
+          authorizationEndpoint: 'https://api.login.yahoo.com/oauth2/request_auth',
+          redirectUri: window.location.origin,
+          scope: [],
+          scopeDelimiter: ',',
+          oauthType: '2.0',
+          popupOptions: { width: 559, height: 519 }
+        },
+        bitbucket: {
+          name: 'bitbucket',
+          url: '/auth/bitbucket',
+          authorizationEndpoint: 'https://bitbucket.org/site/oauth2/authorize',
+          redirectUri: window.location.origin + '/',
+          requiredUrlParams: ['scope'],
+          scope: ['email'],
+          scopeDelimiter: ' ',
+          oauthType: '2.0',
+          popupOptions: { width: 1028, height: 529 }
+        }
+      }
+    })
+    .provider('$auth', ['SatellizerConfig', function(config) {
+      Object.defineProperties(this, {
+        httpInterceptor: {
+          get: function() { return config.httpInterceptor; },
+          set: function(value) {
+            if (typeof value === 'function') {
+              config.httpInterceptor = value;
+            } else {
+              config.httpInterceptor = function() {
+                return value;
+              };
+            }
+          }
+        },
+        baseUrl: {
+          get: function() { return config.baseUrl; },
+          set: function(value) { config.baseUrl = value; }
+        },
+        loginUrl: {
+          get: function() { return config.loginUrl; },
+          set: function(value) { config.loginUrl = value; }
+        },
+        signupUrl: {
+          get: function() { return config.signupUrl; },
+          set: function(value) { config.signupUrl = value; }
+        },
+        tokenRoot: {
+          get: function() { return config.tokenRoot; },
+          set: function(value) { config.tokenRoot = value; }
+        },
+        tokenName: {
+          get: function() { return config.tokenName; },
+          set: function(value) { config.tokenName = value; }
+        },
+        tokenPrefix: {
+          get: function() { return config.tokenPrefix; },
+          set: function(value) { config.tokenPrefix = value; }
+        },
+        unlinkUrl: {
+          get: function() { return config.unlinkUrl; },
+          set: function(value) { config.unlinkUrl = value; }
+        },
+        authHeader: {
+          get: function() { return config.authHeader; },
+          set: function(value) { config.authHeader = value; }
+        },
+        authToken: {
+          get: function() { return config.authToken; },
+          set: function(value) { config.authToken = value; }
+        },
+        withCredentials: {
+          get: function() { return config.withCredentials; },
+          set: function(value) { config.withCredentials = value; }
+        },
+        storageType: {
+          get: function() { return config.storageType; },
+          set: function(value) { config.storageType = value; }
+        }
+      });
+
+      angular.forEach(Object.keys(config.providers), function(provider) {
+        this[provider] = function(params) {
+          return angular.extend(config.providers[provider], params);
+        };
+      }, this);
+
+      var oauth = function(params) {
+        config.providers[params.name] = config.providers[params.name] || {};
+        angular.extend(config.providers[params.name], params);
+      };
+
+      this.oauth1 = function(params) {
+        oauth(params);
+        config.providers[params.name].oauthType = '1.0';
+      };
+
+      this.oauth2 = function(params) {
+        oauth(params);
+        config.providers[params.name].oauthType = '2.0';
+      };
+
+      this.$get = [
+        '$q',
+        'SatellizerShared',
+        'SatellizerLocal',
+        'SatellizerOauth',
+        function($q, shared, local, oauth) {
+          var $auth = {};
+
+          $auth.login = function(user, opts) {
+            return local.login(user, opts);
+          };
+
+          $auth.signup = function(user, options) {
+            return local.signup(user, options);
+          };
+
+          $auth.logout = function() {
+            return shared.logout();
+          };
+
+          $auth.authenticate = function(name, userData) {
+            return oauth.authenticate(name, userData);
+          };
+
+          $auth.link = function(name, userData) {
+            return oauth.authenticate(name, userData);
+          };
+
+          $auth.unlink = function(provider, opts) {
+            return oauth.unlink(provider, opts);
+          };
+
+          $auth.isAuthenticated = function() {
+            return shared.isAuthenticated();
+          };
+
+          $auth.getToken = function() {
+            return shared.getToken();
+          };
+
+          $auth.setToken = function(token) {
+            shared.setToken({ access_token: token });
+          };
+
+          $auth.removeToken = function() {
+            return shared.removeToken();
+          };
+
+          $auth.getPayload = function() {
+            return shared.getPayload();
+          };
+
+          $auth.setStorageType = function(type) {
+            return shared.setStorageType(type);
+          };
+
+          return $auth;
+        }];
+    }])
+    .factory('SatellizerShared', [
+      '$q',
+      '$window',
+      '$log',
+      'SatellizerConfig',
+      'SatellizerStorage',
+      function($q, $window, $log, config, storage) {
+        var Shared = {};
+
+        var tokenName = config.tokenPrefix ? [config.tokenPrefix, config.tokenName].join('_') : config.tokenName;
+
+        Shared.getToken = function() {
+          return storage.get(tokenName);
+        };
+
+        Shared.getPayload = function() {
+          var token = storage.get(tokenName);
+
+          if (token && token.split('.').length === 3) {
+            try {
+              var base64Url = token.split('.')[1];
+              var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+              return JSON.parse(decodeURIComponent(escape(window.atob(base64))));
+            } catch(e) {
+              return undefined;
+            }
+          }
+        };
+
+        Shared.setToken = function(response) {
+          if (!response) {
+            return $log.warn('Can\'t set token without passing a value');
+          }
+
+          var accessToken = response && response.access_token;
+          var token;
+
+          if (accessToken) {
+            if (angular.isObject(accessToken) && angular.isObject(accessToken.data)) {
+              response = accessToken;
+            } else if (angular.isString(accessToken)) {
+              token = accessToken;
+            }
+          }
+
+          if (!token && response) {
+            var tokenRootData = config.tokenRoot && config.tokenRoot.split('.').reduce(function(o, x) { return o[x]; }, response.data);
+            token = tokenRootData ? tokenRootData[config.tokenName] : response.data && response.data[config.tokenName];
+          }
+
+          if (!token) {
+            var tokenPath = config.tokenRoot ? config.tokenRoot + '.' + config.tokenName : config.tokenName;
+            return $log.warn('Expecting a token named "' + tokenPath);
+          }
+
+          storage.set(tokenName, token);
+        };
+
+        Shared.removeToken = function() {
+          storage.remove(tokenName);
+        };
+
+        /**
+         * @returns {boolean}
+         */
+        Shared.isAuthenticated = function() {
+          var token = storage.get(tokenName);
+          // A token is present
+          if (token) {
+            // Token with a valid JWT format XXX.YYY.ZZZ
+            if (token.split('.').length === 3) {
+              // Could be a valid JWT or an access token with the same format
+              try {
+                var base64Url = token.split('.')[1];
+                var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                var exp = JSON.parse($window.atob(base64)).exp;
+                // JWT with an optonal expiration claims
+                if (exp) {
+                  var isExpired = Math.round(new Date().getTime() / 1000) >= exp;
+                  if (isExpired) {
+                    // FAIL: Expired token
+                    return false;
+                  } else {
+                    // PASS: Non-expired token
+                    return true;
+                  }
+                }
+              } catch(e) {
+                // PASS: Non-JWT token that looks like JWT
+                return true;
+              }
+            }
+            // PASS: All other tokens
+            return true;
+          }
+          // FAIL: No token at all
+          return false;
+        };
+
+        Shared.logout = function() {
+          storage.remove(tokenName);
+          return $q.when();
+        };
+
+        Shared.setStorageType = function(type) {
+          config.storageType = type;
+        };
+
+        return Shared;
+      }])
+    .factory('SatellizerOauth', [
+      '$q',
+      '$http',
+      'SatellizerConfig',
+      'SatellizerUtils',
+      'SatellizerShared',
+      'SatellizerOauth1',
+      'SatellizerOauth2',
+      function($q, $http, config, utils, shared, Oauth1, Oauth2) {
+        var Oauth = {};
+
+        Oauth.authenticate = function(name, userData) {
+          var provider = config.providers[name].oauthType === '1.0' ? new Oauth1() : new Oauth2();
+          var deferred = $q.defer();
+
+          provider.open(config.providers[name], userData || {})
+            .then(function(response) {
+              // This is for a scenario when someone wishes to opt out from
+              // Satellizer's magic by doing authorization code exchange and
+              // saving a token manually.
+              if (config.providers[name].url) {
+                shared.setToken(response, false);
+              }
+              deferred.resolve(response);
+            })
+            .catch(function(error) {
+              deferred.reject(error);
+            });
+
+          return deferred.promise;
+        };
+
+        Oauth.unlink = function(provider, opts) {
+          opts = opts || {};
+          opts.url = opts.url ? opts.url : utils.joinUrl(config.baseUrl, config.unlinkUrl);
+          opts.data = { provider: provider } || opts.data;
+          opts.method = opts.method || 'POST';
+          opts.withCredentials = opts.withCredentials || config.withCredentials;
+
+          return $http(opts);
+        };
+
+        return Oauth;
+      }])
+    .factory('SatellizerLocal', [
+      '$http',
+      'SatellizerUtils',
+      'SatellizerShared',
+      'SatellizerConfig',
+      function($http, utils, shared, config) {
+        var Local = {};
+
+        Local.login = function(user, opts) {
+          opts = opts || {};
+          opts.url = opts.url ? opts.url : utils.joinUrl(config.baseUrl, config.loginUrl);
+          opts.data = user || opts.data;
+          opts.method = opts.method || 'POST';
+          opts.withCredentials = opts.withCredentials || config.withCredentials;
+
+          return $http(opts).then(function(response) {
+            shared.setToken(response);
+            return response;
+          });
+        };
+
+        Local.signup = function(user, opts) {
+          opts = opts || {};
+          opts.url = opts.url ? opts.url : utils.joinUrl(config.baseUrl, config.signupUrl);
+          opts.data = user || opts.data;
+          opts.method = opts.method || 'POST';
+          opts.withCredentials = opts.withCredentials || config.withCredentials;
+
+          return $http(opts);
+        };
+
+        return Local;
+      }])
+    .factory('SatellizerOauth2', [
+      '$q',
+      '$http',
+      '$window',
+      '$timeout',
+      'SatellizerPopup',
+      'SatellizerUtils',
+      'SatellizerConfig',
+      'SatellizerStorage',
+      function($q, $http, $window, $timeout, popup, utils, config, storage) {
+        return function() {
+          var Oauth2 = {};
+
+          var defaults = {
+            defaultUrlParams: ['response_type', 'client_id', 'redirect_uri'],
+            responseType: 'code',
+            responseParams: {
+              code: 'code',
+              clientId: 'clientId',
+              redirectUri: 'redirectUri'
+            }
+          };
+
+          Oauth2.open = function(options, userData) {
+            defaults = utils.merge(options, defaults);
+            var defer = $q.defer();
+
+            $timeout(function () {
+              var url;
+              var openPopup;
+              var stateName = defaults.name + '_state';
+
+              if (angular.isFunction(defaults.state)) {
+                storage.set(stateName, defaults.state());
+              } else if (angular.isString(defaults.state)) {
+                storage.set(stateName, defaults.state);
+              }
+
+              url = [defaults.authorizationEndpoint, Oauth2.buildQueryString()].join('?');
+
+              if (window.cordova) {
+                openPopup = popup.open(url, defaults.name, defaults.popupOptions, defaults.redirectUri).eventListener(defaults.redirectUri);
+              } else {
+                openPopup = popup.open(url, defaults.name, defaults.popupOptions, defaults.redirectUri).pollPopup(defaults.redirectUri);
+              }
+
+              return openPopup
+                .then(function(oauthData) {
+                  // When no server URL provided, return popup params as-is.
+                  // This is for a scenario when someone wishes to opt out from
+                  // Satellizer's magic by doing authorization code exchange and
+                  // saving a token manually.
+                  if (defaults.responseType === 'token' || !defaults.url) {
+                    defer.resolve(oauthData);
+                  }
+
+                if (oauthData.state && oauthData.state !== storage.get(stateName)) {
+                  return defer.reject(
+                    'The value returned in the state parameter does not match the state value from your original ' +
+                    'authorization code request.'
+                  );
+                }
+
+                  defer.resolve(Oauth2.exchangeForToken(oauthData, userData));
+                });
+            });
+
+            return defer.promise;
+          };
+
+          Oauth2.exchangeForToken = function(oauthData, userData) {
+            var data = angular.extend({}, userData);
+
+            angular.forEach(defaults.responseParams, function(value, key) {
+              switch (key) {
+                case 'code':
+                  data[value] = oauthData.code;
+                  break;
+                case 'clientId':
+                  data[value] = defaults.clientId;
+                  break;
+                case 'redirectUri':
+                  data[value] = defaults.redirectUri;
+                  break;
+                default:
+                  data[value] = oauthData[key];
+              }
+            });
+
+            if (oauthData.state) {
+              data.state = oauthData.state;
+            }
+
+            var exchangeForTokenUrl = config.baseUrl ? utils.joinUrl(config.baseUrl, defaults.url) : defaults.url;
+
+            return $http.post(exchangeForTokenUrl, data, { withCredentials: config.withCredentials });
+          };
+
+          Oauth2.buildQueryString = function() {
+            var keyValuePairs = [];
+            var urlParamsCategories = ['defaultUrlParams', 'requiredUrlParams', 'optionalUrlParams'];
+
+            angular.forEach(urlParamsCategories, function(paramsCategory) {
+              angular.forEach(defaults[paramsCategory], function(paramName) {
+                var camelizedName = utils.camelCase(paramName);
+                var paramValue = angular.isFunction(defaults[paramName]) ? defaults[paramName]() : defaults[camelizedName];
+
+                if (paramName === 'redirect_uri' && !paramValue) {
+                    return;
+                }
+
+                if (paramName === 'state') {
+                  var stateName = defaults.name + '_state';
+                  paramValue = encodeURIComponent(storage.get(stateName));
+                }
+
+                if (paramName === 'scope' && Array.isArray(paramValue)) {
+                  paramValue = paramValue.join(defaults.scopeDelimiter);
+
+                  if (defaults.scopePrefix) {
+                    paramValue = [defaults.scopePrefix, paramValue].join(defaults.scopeDelimiter);
+                  }
+                }
+
+                keyValuePairs.push([paramName, paramValue]);
+              });
+            });
+
+            return keyValuePairs.map(function(pair) {
+              return pair.join('=');
+            }).join('&');
+          };
+
+          return Oauth2;
+        };
+      }])
+    .factory('SatellizerOauth1', [
+      '$q',
+      '$http',
+      'SatellizerPopup',
+      'SatellizerConfig',
+      'SatellizerUtils',
+      function($q, $http, popup, config, utils) {
+        return function() {
+          var Oauth1 = {};
+
+          var defaults = {
+            url: null,
+            name: null,
+            popupOptions: null,
+            redirectUri: null,
+            authorizationEndpoint: null
+          };
+
+          Oauth1.open = function(options, userData) {
+            angular.extend(defaults, options);
+            var popupWindow;
+            var serverUrl = config.baseUrl ? utils.joinUrl(config.baseUrl, defaults.url) : defaults.url;
+
+            if (!window.cordova) {
+                popupWindow = popup.open('', defaults.name, defaults.popupOptions, defaults.redirectUri);
+            }
+
+            return $http.post(serverUrl, defaults)
+              .then(function(response) {
+                var url = [defaults.authorizationEndpoint, Oauth1.buildQueryString(response.data)].join('?');
+
+                if (window.cordova) {
+                  popupWindow = popup.open(url, defaults.name, defaults.popupOptions, defaults.redirectUri);
+                } else {
+                  popupWindow.popupWindow.location = url;
+                }
+
+                var popupListener;
+
+                if (window.cordova) {
+                  popupListener = popupWindow.eventListener(defaults.redirectUri);
+                } else {
+                  popupListener = popupWindow.pollPopup(defaults.redirectUri);
+                }
+
+                return popupListener
+                  .then(function(response) {
+                    return Oauth1.exchangeForToken(response, userData);
+                  });
+              });
+
+          };
+
+          Oauth1.exchangeForToken = function(oauthData, userData) {
+            var data = angular.extend({}, userData, oauthData);
+            var exchangeForTokenUrl = config.baseUrl ? utils.joinUrl(config.baseUrl, defaults.url) : defaults.url;
+            return $http.post(exchangeForTokenUrl, data, { withCredentials: config.withCredentials });
+          };
+
+          Oauth1.buildQueryString = function(obj) {
+            var str = [];
+
+            angular.forEach(obj, function(value, key) {
+              str.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+            });
+
+            return str.join('&');
+          };
+
+          return Oauth1;
+        };
+      }])
+    .factory('SatellizerPopup', [
+      '$q',
+      '$interval',
+      '$window',
+      'SatellizerConfig',
+      'SatellizerUtils',
+      function($q, $interval, $window, config, utils) {
+        var Popup = {};
+
+        Popup.url = '';
+        Popup.popupWindow = null;
+
+        Popup.open = function(url, name, options) {
+          Popup.url = url;
+
+          var stringifiedOptions = Popup.stringifyOptions(Popup.prepareOptions(options));
+          var UA = $window.navigator.userAgent;
+          var windowName = (window.cordova || UA.indexOf('CriOS') > -1) ? '_blank' : name;
+
+          Popup.popupWindow = $window.open(url, windowName, stringifiedOptions);
+
+          $window.popup = Popup.popupWindow;
+
+          if (Popup.popupWindow && Popup.popupWindow.focus) {
+            Popup.popupWindow.focus();
+          }
+
+          return Popup;
+        };
+
+        Popup.eventListener = function(redirectUri) {
+          var deferred = $q.defer();
+
+          Popup.popupWindow.addEventListener('loadstart', function(event) {
+            if (event.url.indexOf(redirectUri) !== 0) {
+              return;
+            }
+
+            var parser = document.createElement('a');
+            parser.href = event.url;
+
+            if (parser.search || parser.hash) {
+              var queryParams = parser.search.substring(1).replace(/\/$/, '');
+              var hashParams = parser.hash.substring(1).replace(/\/$/, '');
+              var hash = utils.parseQueryString(hashParams);
+              var qs = utils.parseQueryString(queryParams);
+
+              angular.extend(qs, hash);
+
+              if (!qs.error) {
+                deferred.resolve(qs);
+              }
+
+              Popup.popupWindow.close();
+            }
+          });
+
+          Popup.popupWindow.addEventListener('loaderror', function() {
+            deferred.reject('Authorization Failed');
+          });
+
+          return deferred.promise;
+        };
+
+        Popup.pollPopup = function(redirectUri) {
+          var deferred = $q.defer();
+
+          var redirectUriParser = document.createElement('a');
+          redirectUriParser.href = redirectUri;
+
+          var redirectUriPath = utils.getFullUrlPath(redirectUriParser);
+
+          var polling = $interval(function() {
+            if (!Popup.popupWindow || Popup.popupWindow.closed || Popup.popupWindow.closed === undefined) {
+              deferred.reject('The popup window was closed.');
+              $interval.cancel(polling);
+            }
+
+            try {
+              var popupWindowPath = utils.getFullUrlPath(Popup.popupWindow.location);
+
+              // Redirect has occurred.
+              if (popupWindowPath === redirectUriPath) {
+                // Contains query/hash parameters as expected.
+                if (Popup.popupWindow.location.search || Popup.popupWindow.location.hash) {
+                  var queryParams = Popup.popupWindow.location.search.substring(1).replace(/\/$/, '');
+                  var hashParams = Popup.popupWindow.location.hash.substring(1).replace(/[\/$]/, '');
+                  var hash = utils.parseQueryString(hashParams);
+                  var qs = utils.parseQueryString(queryParams);
+
+                  angular.extend(qs, hash);
+
+                  if (qs.error) {
+                    deferred.reject(qs);
+                  } else {
+                    deferred.resolve(qs);
+                  }
+                } else {
+                  // Does not contain query/hash parameters, can't do anything at this point.
+                  deferred.reject(
+                    'Redirect has occurred but no query or hash parameters were found. ' +
+                    'They were either not set during the redirect, or were removed before Satellizer ' +
+                    'could read them, e.g. AngularJS routing mechanism.'
+                  );
+                }
+
+                $interval.cancel(polling);
+                Popup.popupWindow.close();
+              }
+            } catch (error) {
+              // Ignore DOMException: Blocked a frame with origin from accessing a cross-origin frame.
+              // A hack to get around same-origin security policy errors in IE.
+            }
+          }, 20);
+
+          return deferred.promise;
+        };
+
+        Popup.prepareOptions = function(options) {
+          options = options || {};
+          var width = options.width || 500;
+          var height = options.height || 500;
+
+          return angular.extend({
+            width: width,
+            height: height,
+            left: $window.screenX + (($window.outerWidth - width) / 2),
+            top: $window.screenY + (($window.outerHeight - height) / 2.5)
+          }, options);
+        };
+
+        Popup.stringifyOptions = function(options) {
+          var parts = [];
+          angular.forEach(options, function(value, key) {
+            parts.push(key + '=' + value);
+          });
+          return parts.join(',');
+        };
+
+        return Popup;
+      }])
+    .service('SatellizerUtils', function() {
+      this.getFullUrlPath = function(location) {
+        return location.protocol + '//' + location.hostname +
+        (location.port ? ':' + location.port : '') + location.pathname;
+      };
+
+      this.camelCase = function(name) {
+        return name.replace(/([\:\-\_]+(.))/g, function(_, separator, letter, offset) {
+          return offset ? letter.toUpperCase() : letter;
+        });
+      };
+
+      this.parseQueryString = function(keyValue) {
+        var obj = {}, key, value;
+        angular.forEach((keyValue || '').split('&'), function(keyValue) {
+          if (keyValue) {
+            value = keyValue.split('=');
+            key = decodeURIComponent(value[0]);
+            obj[key] = angular.isDefined(value[1]) ? decodeURIComponent(value[1]) : true;
+          }
+        });
+        return obj;
+      };
+
+      this.joinUrl = function(baseUrl, url) {
+        if (/^(?:[a-z]+:)?\/\//i.test(url)) {
+          return url;
+        }
+
+        var joined = [baseUrl, url].join('/');
+
+        var normalize = function(str) {
+          return str
+            .replace(/[\/]+/g, '/')
+            .replace(/\/\?/g, '?')
+            .replace(/\/\#/g, '#')
+            .replace(/\:\//g, '://');
+        };
+
+        return normalize(joined);
+      };
+
+      this.merge = function(obj1, obj2) {
+        var result = {};
+        for (var i in obj1) {
+          if (obj1.hasOwnProperty(i)) {
+            if ((i in obj2) && (typeof obj1[i] === 'object') && (i !== null)) {
+              result[i] = this.merge(obj1[i], obj2[i]);
+            } else {
+              result[i] = obj1[i];
+            }
+          }
+        }
+        for (i in obj2) {
+          if (obj2.hasOwnProperty(i)) {
+            if (i in result) {
+              continue;
+            }
+            result[i] = obj2[i];
+          }
+
+        }
+        return result;
+      };
+    })
+    .factory('SatellizerStorage', ['$window', '$log', 'SatellizerConfig', function($window, $log, config) {
+
+      var store = {};
+
+      // Check if localStorage or sessionStorage is available or enabled
+      var isStorageAvailable = (function() {
+        try {
+          var supported = config.storageType in $window && $window[config.storageType] !== null;
+
+          if (supported) {
+            var key = Math.random().toString(36).substring(7);
+            $window[config.storageType].setItem(key, '');
+            $window[config.storageType].removeItem(key);
+          }
+
+          return supported;
+        } catch (e) {
+          return false;
+        }
+      })();
+
+      if (!isStorageAvailable) {
+        $log.warn(config.storageType + ' is not available.');
+      }
+
+      return {
+        get: function(key) {
+          return isStorageAvailable ? $window[config.storageType].getItem(key) : store[key];
+        },
+        set: function(key, value) {
+          return isStorageAvailable ? $window[config.storageType].setItem(key, value) : store[key] = value;
+        },
+        remove: function(key) {
+          return isStorageAvailable ? $window[config.storageType].removeItem(key): delete store[key];
+        }
+      };
+
+    }])
+    .factory('SatellizerInterceptor', [
+      '$q',
+      'SatellizerConfig',
+      'SatellizerStorage',
+      'SatellizerShared',
+      function($q, config, storage, shared) {
+        return {
+          request: function(request) {
+            if (request.skipAuthorization) {
+              return request;
+            }
+
+            if (shared.isAuthenticated() && config.httpInterceptor(request)) {
+              var tokenName = config.tokenPrefix ? config.tokenPrefix + '_' + config.tokenName : config.tokenName;
+              var token = storage.get(tokenName);
+
+              if (config.authHeader && config.authToken) {
+                token = config.authToken + ' ' + token;
+              }
+
+              request.headers[config.authHeader] = token;
+            }
+
+            return request;
+          },
+          responseError: function(response) {
+            return $q.reject(response);
+          }
+        };
+      }])
+    .config(['$httpProvider', function($httpProvider) {
+      $httpProvider.interceptors.push('SatellizerInterceptor');
+    }]);
+
+})(window, window.angular);
+
+},{}]},{},[1]);
