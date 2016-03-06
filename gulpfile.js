@@ -8,7 +8,6 @@ var rename = require('gulp-rename');
 
 jsfiles = [
     'angularjs/app.js',
-    'angularjs/angular-mocks.js'
 ];
 
 lessfiles = [

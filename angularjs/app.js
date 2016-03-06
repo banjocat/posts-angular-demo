@@ -1,28 +1,31 @@
+'use strict';
 var angular = require('angular');
 
-var stickyApp = angular.module('stickyApp', []);
+var stickyApp = angular.module('stickyApp', [require('satellizer')])
+  .config(function($authProvider) {
 
+    $authProvider.google({
+      clientId: '1756204919-rb2dt1t62tecum2quucdcjljcouncoge.apps.googleusercontent.com'
+    });
+  });
 
-stickyApp.service('$webstorage', function() {
-    this.getposts = function() {
-      var value = localStorage.getItem('posts');
-      // If first time visiting or it is empty
-      if (!value || value == "[]") {
-        return [{id: 1, text: 'Replace me!'}];
-      }
-      else {
-        return angular.fromJson(value);
-      }
+stickyApp.controller('stickyPosts', function ($scope, $auth) {
+
+  $scope.posts = [];
+
+  $scope.getLoginText = function() {
+    if (!$auth.getToken())
+      return "Login";
+    else {
+      return "Signed in";
     }
+  }
 
-    this.saveposts = function(posts) {
-        localStorage.setItem('posts', angular.toJson(posts));
-    }
-});
+  $scope.authenticate = function(provider) {
+    $auth.authenticate(provider);
+    console.log('Token', $auth.getToken())
+  }
 
-stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
-
-  $scope.posts = $webstorage.getposts();
 
   var getId = function() {
       var id = 1;
@@ -35,10 +38,35 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
       return id;
   };
 
+
+
+/*
   $scope.add = function() {
     $scope.posts.push({id: getId(), text: ''});
     $webstorage.saveposts($scope.posts);
   }
+
+  $scope.getposts = function(googleId) {
+    $http( {
+      method: 'GET',
+      url: '/post/get',
+      data: {googleId: googleId},
+    }).then(function successCallback(response) {
+
+    }, function errorCallback(response) {
+
+    });
+  }
+  */
+
+  $scope.savepost = function(googleId) {
+    $http( {
+      method: 'POST',
+      url: '/post/save',
+      data: {googleId: googleId, posts: $scope.posts},
+    })
+  }
+
 
   $scope.save = function(id, text) {
     var i;
@@ -47,7 +75,7 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
         $scope.posts[i].text = text;
       }
     }
-    $webstorage.saveposts($scope.posts);
+    //$webstorage.saveposts($scope.posts);
   }
 
   $scope.delete = function(id) {
@@ -57,7 +85,7 @@ stickyApp.controller('stickyPosts', function ($scope, $webstorage) {
         $scope.posts.splice(i, 1);
       }
     }
-    $webstorage.saveposts($scope.posts);
+    //$webstorage.saveposts($scope.posts);
   }
 
 
