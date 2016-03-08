@@ -1,4 +1,4 @@
-# Learning angular
+# Learning angular and mongodb
 This is my adventure in learning angular and mongodb
 
 The actually app is deployed on heroku at http://jacks-angular-demo.herokuapp.com/
