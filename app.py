@@ -49,6 +49,6 @@ def tests():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    if 'DEBUG' in os.environ:
+    if 'PRODUCTION' not in os.environ:
         app.debug = True
-        app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port)
