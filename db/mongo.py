@@ -1,7 +1,7 @@
 """
 Handles all database calls to mongodb
 """
-import random
+import uuid
 import pymongo
 
 CLIENT = pymongo.MongoClient()
@@ -11,7 +11,7 @@ def create_token(email):
     '''
     Creates a token and stores it in the database
     '''
-    token = random.randrange(1, 100000000)
+    token = uuid.uuid4()
     DB.sessions.delete_many({"email": email})
     DB.insert_one({"email": email, "token":token})
     return token
