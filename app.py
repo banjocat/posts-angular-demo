@@ -2,7 +2,6 @@
 Main app
 '''
 import os
-import sys
 
 import json
 from flask import Flask, send_file, request, jsonify, session
@@ -27,7 +26,7 @@ def google():
     access_token_url = 'https://accounts.google.com/o/oauth2/token'
     people_api_url = 'https://www.googleapis.com/plus/v1/people/me/openIdConnect'
     if 'PRODUCTION' in os.environ:
-        google_secrete = os.environ['GOOGLE_SECRET']
+        google_secret = os.environ['GOOGLE_SECRET']
     else:
         google_secret = 'zsu7pzGn7Bf4FW0OD4rOidHE'
 
