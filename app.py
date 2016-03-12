@@ -2,9 +2,10 @@
 Main app
 '''
 import os
+import sys
 
 import json
-from flask import Flask, send_file, request, jsonify
+from flask import Flask, send_file, request, jsonify, session
 import requests
 
 APP = Flask(__name__)
@@ -25,7 +26,10 @@ def google():
     '''
     access_token_url = 'https://accounts.google.com/o/oauth2/token'
     people_api_url = 'https://www.googleapis.com/plus/v1/people/me/openIdConnect'
-    google_secret = 'zsu7pzGn7Bf4FW0OD4rOidHE'
+    if 'PRODUCTION' in os.environ:
+        google_secrete = os.environ['GOOGLE_SECRET']
+    else:
+        google_secret = 'zsu7pzGn7Bf4FW0OD4rOidHE'
 
     payload = dict(client_id=request.json['clientId'],
                    redirect_uri=request.json['redirectUri'],
@@ -42,6 +46,13 @@ def google():
 
     # read db for token
     return jsonify(token=token)
+
+@APP.route('/notes', methods=['POST'])
+def list_post():
+    '''
+    handles saving a notes
+    '''
+    pass
 
 
 if __name__ == '__main__':

@@ -14,6 +14,7 @@ def create_token(email):
     token = random.randrange(1, 100000000)
     DB.sessions.delete_many({"email": email})
     DB.insert_one({"email": email, "token":token})
+    return token
 
 def get_email_from_token(token):
     '''
@@ -24,15 +25,15 @@ def get_email_from_token(token):
         return None
     return document['email']
 
-def add_posts(email, posts, source='gmail'):
+def add_notes(email, notes, source='gmail'):
     '''
-    Replaces the users posts with a new array
+    Replaces the users notes with a new array
     '''
-    DB.posts.update_one({source: email, "posts": posts}, upsert=True)
+    DB.notes.update_one({source: email, "notes": notes}, upsert=True)
 
-def get_posts(email, source='gmail'):
+def get_notes(email, source='gmail'):
     '''
-    Gets all the posts of a users
+    Gets all the notes of a users
     '''
-    document = DB.posts.find_one({source: email})
-    return document['posts']
+    document = DB.notes.find_one({source: email})
+    return document['notes']
