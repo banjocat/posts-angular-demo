@@ -24,16 +24,15 @@ def get_email_from_token(token):
         return None
     return document['email']
 
-def add_posts(email, posts):
+def add_posts(email, posts, source='gmail'):
     '''
     Replaces the users posts with a new array
     '''
-    DB.posts.delete_many({"email": email})
-    DB.insert_one({"email": email, "posts": posts})
+    DB.posts.update_one({source: email, "posts": posts}, upsert=True)
 
-def get_posts(email):
+def get_posts(email, source='gmail'):
     '''
     Gets all the posts of a users
     '''
-    document = DB.posts.find_one({"email": email})
+    document = DB.posts.find_one({source: email})
     return document['posts']
